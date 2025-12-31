@@ -35,18 +35,28 @@ def query_wolfram_metadata(lat: float, lon: float) -> dict:
     code = f'''
 pos = GeoPosition[{{{lat}, {lon}}}];
 safeNames[list_] := Select[Map[CommonName, list], StringQ];
-divisions = GeoNearest["AdministrativeDivision", pos, 6];
-(* Filter to get county-level, not state/country level *)
+safeQuery[type_, n_] := Quiet[Check[GeoNearest[type, pos, n], {{}}]];
+divisions = safeQuery["AdministrativeDivision", 6];
 counties = Select[divisions, StringCount[CommonName[#], ","] >= 2 &];
 ExportString[<|
   "divisions" -> Take[safeNames[counties], UpTo[4]],
-  "lakes" -> safeNames[GeoNearest["Lake", pos, 4]],
-  "islands" -> safeNames[GeoNearest["Island", pos, 4]],
-  "mountains" -> safeNames[GeoNearest["Mountain", pos, 3]],
-  "cities" -> safeNames[GeoNearest["City", pos, 5]],
-  "historicalSites" -> safeNames[GeoNearest["HistoricalSite", pos, 6]],
-  "waterfalls" -> safeNames[GeoNearest["Waterfall", pos, 3]],
-  "buildings" -> safeNames[GeoNearest["Building", pos, 4]]
+  "cities" -> safeNames[safeQuery["City", 5]],
+  "lakes" -> safeNames[safeQuery["Lake", 4]],
+  "islands" -> safeNames[safeQuery["Island", 4]],
+  "mountains" -> safeNames[safeQuery["Mountain", 3]],
+  "forests" -> safeNames[safeQuery["Forest", 3]],
+  "historicalSites" -> safeNames[safeQuery["HistoricalSite", 6]],
+  "museums" -> safeNames[safeQuery["Museum", 4]],
+  "universities" -> safeNames[safeQuery["University", 3]],
+  "militaryBases" -> safeNames[safeQuery["MilitaryBase", 3]],
+  "shipwrecks" -> safeNames[safeQuery["Shipwreck", 5]],
+  "bridges" -> safeNames[safeQuery["Bridge", 4]],
+  "dams" -> safeNames[safeQuery["Dam", 4]],
+  "mines" -> safeNames[safeQuery["Mine", 3]],
+  "tunnels" -> safeNames[safeQuery["Tunnel", 3]],
+  "airports" -> safeNames[safeQuery["Airport", 3]],
+  "waterfalls" -> safeNames[safeQuery["Waterfall", 3]],
+  "buildings" -> safeNames[safeQuery["Building", 4]]
 |>, "JSON"]
 '''
 
@@ -55,7 +65,7 @@ ExportString[<|
             [WOLFRAMSCRIPT, "-code", code],
             capture_output=True,
             text=True,
-            timeout=90
+            timeout=120
         )
         if result.returncode == 0 and result.stdout.strip():
             data = json.loads(result.stdout.strip())

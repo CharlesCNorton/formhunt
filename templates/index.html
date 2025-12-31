@@ -169,6 +169,35 @@
             font-style: italic;
         }
 
+        .layer-toggles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 10px;
+        }
+
+        .layer-btn {
+            flex: 0 0 auto;
+            padding: 4px 8px;
+            font-size: 0.75em;
+            background: #1a1a2e;
+            border: 1px solid #333;
+            color: #666;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        .layer-btn:hover {
+            border-color: #555;
+            color: #999;
+        }
+
+        .layer-btn.active {
+            background: #2a3a5a;
+            border-color: #4a6fa5;
+            color: #7eb8da;
+        }
+
         .hint {
             font-size: 0.75em;
             color: #555;
@@ -226,7 +255,14 @@
         </div>
 
         <div class="section" id="wolfram-section" style="display: none;">
-            <div class="section-label">Wolfram Metadata</div>
+            <div class="section-label">Data Layers</div>
+            <div class="layer-toggles">
+                <button class="layer-btn active" data-layer="political">Political</button>
+                <button class="layer-btn active" data-layer="natural">Natural</button>
+                <button class="layer-btn" data-layer="historical">Historical</button>
+                <button class="layer-btn" data-layer="infrastructure">Infrastructure</button>
+                <button class="layer-btn" data-layer="institutional">Institutional</button>
+            </div>
             <div id="wolfram-data" class="wolfram-data"></div>
         </div>
 
@@ -458,30 +494,87 @@
 
                 let html = '';
 
-                const labels = {
-                    divisions: 'Divisions',
-                    lakes: 'Lakes',
-                    islands: 'Islands',
-                    mountains: 'Mountains',
-                    cities: 'Cities',
-                    historicalSites: 'Historical Sites',
-                    waterfalls: 'Waterfalls',
-                    buildings: 'Buildings'
-                };
-
-                for (const [key, label] of Object.entries(labels)) {
-                    if (data[key] && data[key].length > 0) {
-                        html += `<div class="wf-row"><span class="wf-label">${label}:</span> <span class="wf-list">${data[key].join(', ')}</span></div>`;
-                    }
-                }
-
-                dataDiv.innerHTML = html || '<span class="wolfram-loading">No local data</span>';
+                // Store data globally for filtering
+                window.wolframData = data;
+                renderWolframData();
 
             } catch (e) {
                 console.log('Wolfram query failed:', e);
                 section.style.display = 'none';
             }
         }
+
+        // Layer definitions
+        const layers = {
+            political: {
+                divisions: 'Divisions',
+                cities: 'Cities'
+            },
+            natural: {
+                lakes: 'Lakes',
+                islands: 'Islands',
+                mountains: 'Mountains',
+                forests: 'Forests',
+                waterfalls: 'Waterfalls'
+            },
+            historical: {
+                historicalSites: 'Historical Sites',
+                museums: 'Museums',
+                shipwrecks: 'Shipwrecks'
+            },
+            infrastructure: {
+                bridges: 'Bridges',
+                dams: 'Dams',
+                tunnels: 'Tunnels',
+                airports: 'Airports',
+                mines: 'Mines'
+            },
+            institutional: {
+                universities: 'Universities',
+                militaryBases: 'Military Bases',
+                buildings: 'Buildings'
+            }
+        };
+
+        // Get active layers
+        function getActiveLayers() {
+            const active = [];
+            document.querySelectorAll('.layer-btn.active').forEach(btn => {
+                active.push(btn.dataset.layer);
+            });
+            return active;
+        }
+
+        // Render data based on active layers
+        function renderWolframData() {
+            const data = window.wolframData;
+            if (!data) return;
+
+            const dataDiv = document.getElementById('wolfram-data');
+            const activeLayers = getActiveLayers();
+            let html = '';
+
+            for (const layerName of activeLayers) {
+                const layerFields = layers[layerName];
+                if (!layerFields) continue;
+
+                for (const [key, label] of Object.entries(layerFields)) {
+                    if (data[key] && data[key].length > 0) {
+                        html += `<div class="wf-row"><span class="wf-label">${label}:</span> <span class="wf-list">${data[key].join(', ')}</span></div>`;
+                    }
+                }
+            }
+
+            dataDiv.innerHTML = html || '<span class="wolfram-loading">No data for selected layers</span>';
+        }
+
+        // Layer toggle handlers
+        document.querySelectorAll('.layer-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                renderWolframData();
+            });
+        });
 
         // Copy coordinates
         document.getElementById('btn-copy').onclick = async function() {
