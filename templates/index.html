@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FormHunt</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.113/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.113/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #eee; }
+
+        #cesiumContainer {
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #sidebar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 340px;
+            background: rgba(20, 20, 40, 0.95);
+            border-radius: 8px;
+            padding: 16px;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            font-size: 1.3em;
+            margin-bottom: 4px;
+            color: #7eb8da;
+        }
+
+        .subtitle {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 16px;
+        }
+
+        #mode-toggle {
+            width: 100%;
+            padding: 12px;
+            font-size: 1em;
+            border: 2px solid #444;
+            background: #2a2a4a;
+            color: #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+
+        #mode-toggle.select-mode {
+            background: #4a6fa5;
+            border-color: #7eb8da;
+            color: white;
+        }
+
+        #mode-toggle:hover {
+            border-color: #666;
+        }
+
+        .section {
+            margin-bottom: 16px;
+        }
+
+        .section-label {
+            font-size: 0.75em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        #coords-display {
+            background: #0d0d1a;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85em;
+            line-height: 1.6;
+        }
+
+        #coords-display .row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #coords-display .label { color: #7eb8da; }
+        #coords-display .value { color: #98c379; }
+
+        #place-name {
+            width: 100%;
+            padding: 8px 10px;
+            background: #2a2a4a;
+            border: 1px solid #444;
+            color: #eee;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #444;
+            background: #2a2a4a;
+            color: #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+
+        button:hover { background: #3a3a6a; }
+
+        button.copy-btn {
+            background: #2d5a3d;
+            border-color: #4a8a5a;
+        }
+        button.copy-btn:hover { background: #3d7a5d; }
+
+        .zoom-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            background: #4a6fa5;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+
+        .wolfram-data {
+            background: #0d0d1a;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            line-height: 1.5;
+        }
+
+        .wolfram-data .wf-row {
+            margin-bottom: 4px;
+        }
+
+        .wolfram-data .wf-label {
+            color: #d19a66;
+            font-weight: 500;
+        }
+
+        .wolfram-data .wf-value {
+            color: #98c379;
+        }
+
+        .wolfram-data .wf-list {
+            color: #888;
+            font-size: 0.9em;
+            margin-left: 8px;
+        }
+
+        .wolfram-loading {
+            color: #666;
+            font-style: italic;
+        }
+
+        .hint {
+            font-size: 0.75em;
+            color: #555;
+            margin-top: 12px;
+            text-align: center;
+        }
+
+        .copied-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2d5a3d;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 4px;
+            z-index: 2000;
+            animation: fadeInOut 2s ease-in-out;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        /* Selection cursor when in select mode */
+        .select-cursor { cursor: crosshair !important; }
+    </style>
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+
+    <div id="sidebar">
+        <h1>FormHunt</h1>
+        <p class="subtitle">Geographic coordinate capture</p>
+
+        <button id="mode-toggle">Navigate Globe</button>
+
+        <div class="section">
+            <div class="section-label">Selection</div>
+            <div id="coords-display">
+                <div class="row"><span class="label">North</span> <span class="value" id="v-north">--</span></div>
+                <div class="row"><span class="label">South</span> <span class="value" id="v-south">--</span></div>
+                <div class="row"><span class="label">East</span> <span class="value" id="v-east">--</span></div>
+                <div class="row"><span class="label">West</span> <span class="value" id="v-west">--</span></div>
+                <div class="row"><span class="label">Area</span> <span class="value" id="v-area">--</span></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">Place Name</div>
+            <input type="text" id="place-name" placeholder="Auto-detected or type manually">
+        </div>
+
+        <div class="section" id="wolfram-section" style="display: none;">
+            <div class="section-label">Wolfram Metadata</div>
+            <div id="wolfram-data" class="wolfram-data"></div>
+        </div>
+
+        <div class="btn-row">
+            <button id="btn-copy" class="copy-btn">Copy Coordinates</button>
+            <button id="btn-clear">Clear</button>
+        </div>
+
+        <p class="hint">Press S to toggle selection mode</p>
+    </div>
+
+    <script>
+        // Initialize viewer with no base layer, then add imagery
+        const viewer = new Cesium.Viewer('cesiumContainer', {
+            baseLayerPicker: false,
+            geocoder: false,
+            homeButton: true,
+            sceneModePicker: true,
+            navigationHelpButton: false,
+            animation: false,
+            timeline: false,
+            fullscreenButton: false,
+            vrButton: false,
+            infoBox: false,
+            selectionIndicator: false,
+            imageryProvider: false  // Start with no imagery
+        });
+
+        // Add OpenStreetMap tiles (reliable, no API key)
+        try {
+            const osmProvider = new Cesium.OpenStreetMapImageryProvider({
+                url: 'https://tile.openstreetmap.org/'
+            });
+            viewer.imageryLayers.addImageryProvider(osmProvider);
+            console.log('OSM imagery loaded');
+        } catch (e) {
+            console.error('Failed to load imagery:', e);
+        }
+
+        // Globe settings
+        viewer.scene.globe.enableLighting = false;
+        viewer.scene.skyAtmosphere.show = true;
+        viewer.scene.globe.showGroundAtmosphere = true;
+
+        // State
+        let selectMode = false;
+        let isDrawing = false;
+        let startPosition = null;
+        let currentSelection = null;
+        let selectionEntity = null;
+
+        const modeToggle = document.getElementById('mode-toggle');
+        const cesiumContainer = document.getElementById('cesiumContainer');
+
+        // Toggle selection mode
+        function toggleSelectMode() {
+            selectMode = !selectMode;
+            modeToggle.textContent = selectMode ? 'Selection Mode (click S to exit)' : 'Navigate Globe';
+            modeToggle.classList.toggle('select-mode', selectMode);
+            cesiumContainer.classList.toggle('select-cursor', selectMode);
+
+            // Disable/enable default camera controls
+            viewer.scene.screenSpaceCameraController.enableRotate = !selectMode;
+            viewer.scene.screenSpaceCameraController.enableTranslate = !selectMode;
+            viewer.scene.screenSpaceCameraController.enableZoom = true; // Always allow zoom
+            viewer.scene.screenSpaceCameraController.enableTilt = !selectMode;
+            viewer.scene.screenSpaceCameraController.enableLook = !selectMode;
+        }
+
+        modeToggle.onclick = toggleSelectMode;
+
+        // Keyboard shortcut
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 's' || e.key === 'S') {
+                if (document.activeElement.tagName !== 'INPUT') {
+                    toggleSelectMode();
+                }
+            }
+        });
+
+        // Mouse handlers
+        const handler = new Cesium.ScreenSpaceEventHandler(viewer.canvas);
+
+        handler.setInputAction(function(click) {
+            if (!selectMode) return;
+
+            const cartesian = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
+            if (cartesian) {
+                startPosition = Cesium.Cartographic.fromCartesian(cartesian);
+                isDrawing = true;
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+
+        handler.setInputAction(function(movement) {
+            if (!selectMode || !isDrawing || !startPosition) return;
+
+            const cartesian = viewer.camera.pickEllipsoid(movement.endPosition, viewer.scene.globe.ellipsoid);
+            if (!cartesian) return;
+
+            const endPosition = Cesium.Cartographic.fromCartesian(cartesian);
+            drawRectangle(startPosition, endPosition);
+        }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+        handler.setInputAction(function() {
+            if (!selectMode) return;
+            isDrawing = false;
+            if (currentSelection) {
+                reverseGeocode();
+            }
+        }, Cesium.ScreenSpaceEventType.LEFT_UP);
+
+        function drawRectangle(start, end) {
+            const west = Math.min(Cesium.Math.toDegrees(start.longitude), Cesium.Math.toDegrees(end.longitude));
+            const east = Math.max(Cesium.Math.toDegrees(start.longitude), Cesium.Math.toDegrees(end.longitude));
+            const south = Math.min(Cesium.Math.toDegrees(start.latitude), Cesium.Math.toDegrees(end.latitude));
+            const north = Math.max(Cesium.Math.toDegrees(start.latitude), Cesium.Math.toDegrees(end.latitude));
+
+            currentSelection = { north, south, east, west };
+            currentSelection.area_km2 = calculateArea(currentSelection);
+
+            if (selectionEntity) {
+                viewer.entities.remove(selectionEntity);
+            }
+
+            selectionEntity = viewer.entities.add({
+                rectangle: {
+                    coordinates: Cesium.Rectangle.fromDegrees(west, south, east, north),
+                    material: Cesium.Color.CORNFLOWERBLUE.withAlpha(0.3),
+                    outline: true,
+                    outlineColor: Cesium.Color.WHITE,
+                    outlineWidth: 2
+                }
+            });
+
+            updateDisplay();
+        }
+
+        function calculateArea(bbox) {
+            const R = 6371;
+            const lat1 = bbox.south * Math.PI / 180;
+            const lat2 = bbox.north * Math.PI / 180;
+            const dlon = (bbox.east - bbox.west) * Math.PI / 180;
+            const dlat = lat2 - lat1;
+            const avgLat = (lat1 + lat2) / 2;
+            return Math.abs(R * dlon * Math.cos(avgLat) * R * dlat);
+        }
+
+        function classifyZoom(area) {
+            if (area < 0.01) return 'Site';
+            if (area < 1) return 'Local';
+            if (area < 100) return 'Urban';
+            if (area < 10000) return 'Regional';
+            if (area < 50000) return 'National';
+            return 'Continental';
+        }
+
+        function updateDisplay() {
+            if (!currentSelection) return;
+
+            document.getElementById('v-north').textContent = currentSelection.north.toFixed(6);
+            document.getElementById('v-south').textContent = currentSelection.south.toFixed(6);
+            document.getElementById('v-east').textContent = currentSelection.east.toFixed(6);
+            document.getElementById('v-west').textContent = currentSelection.west.toFixed(6);
+
+            const zoom = classifyZoom(currentSelection.area_km2);
+            document.getElementById('v-area').innerHTML =
+                `${currentSelection.area_km2.toFixed(2)} km<sup>2</sup> <span class="zoom-badge">${zoom}</span>`;
+        }
+
+        function clearSelection() {
+            if (selectionEntity) {
+                viewer.entities.remove(selectionEntity);
+                selectionEntity = null;
+            }
+            currentSelection = null;
+            document.getElementById('v-north').textContent = '--';
+            document.getElementById('v-south').textContent = '--';
+            document.getElementById('v-east').textContent = '--';
+            document.getElementById('v-west').textContent = '--';
+            document.getElementById('v-area').textContent = '--';
+            document.getElementById('place-name').value = '';
+            document.getElementById('wolfram-section').style.display = 'none';
+        }
+
+        document.getElementById('btn-clear').onclick = clearSelection;
+
+        async function reverseGeocode() {
+            if (!currentSelection) return;
+            const lat = (currentSelection.north + currentSelection.south) / 2;
+            const lon = (currentSelection.east + currentSelection.west) / 2;
+
+            // OSM reverse geocode
+            try {
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
+                    { headers: { 'User-Agent': 'FormHunt/1.0' } }
+                );
+                const data = await response.json();
+                const parts = (data.display_name || '').split(', ').slice(0, 3);
+                document.getElementById('place-name').value = parts.join(', ');
+            } catch (e) {
+                console.log('Geocoding failed');
+            }
+
+            // Wolfram metadata (async, fail-silent)
+            fetchWolframMetadata(lat, lon);
+        }
+
+        async function fetchWolframMetadata(lat, lon) {
+            const section = document.getElementById('wolfram-section');
+            const dataDiv = document.getElementById('wolfram-data');
+
+            section.style.display = 'block';
+            dataDiv.innerHTML = '<span class="wolfram-loading">Querying Wolfram...</span>';
+
+            try {
+                const response = await fetch('/api/wolfram-metadata', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat, lon })
+                });
+
+                const data = await response.json();
+
+                if (Object.keys(data).length === 0) {
+                    section.style.display = 'none';
+                    return;
+                }
+
+                let html = '';
+
+                const labels = {
+                    divisions: 'Divisions',
+                    lakes: 'Lakes',
+                    islands: 'Islands',
+                    mountains: 'Mountains',
+                    cities: 'Cities',
+                    historicalSites: 'Historical Sites',
+                    waterfalls: 'Waterfalls',
+                    buildings: 'Buildings'
+                };
+
+                for (const [key, label] of Object.entries(labels)) {
+                    if (data[key] && data[key].length > 0) {
+                        html += `<div class="wf-row"><span class="wf-label">${label}:</span> <span class="wf-list">${data[key].join(', ')}</span></div>`;
+                    }
+                }
+
+                dataDiv.innerHTML = html || '<span class="wolfram-loading">No local data</span>';
+
+            } catch (e) {
+                console.log('Wolfram query failed:', e);
+                section.style.display = 'none';
+            }
+        }
+
+        // Copy coordinates
+        document.getElementById('btn-copy').onclick = async function() {
+            if (!currentSelection) {
+                showToast('No selection');
+                return;
+            }
+
+            const placeName = document.getElementById('place-name').value || 'Selected Region';
+            const zoom = classifyZoom(currentSelection.area_km2);
+
+            const text = `${placeName}
+North: ${currentSelection.north.toFixed(6)}
+South: ${currentSelection.south.toFixed(6)}
+East: ${currentSelection.east.toFixed(6)}
+West: ${currentSelection.west.toFixed(6)}
+Area: ${currentSelection.area_km2.toFixed(2)} km² (${zoom})`;
+
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('Copied!');
+            } catch (e) {
+                console.error('Copy failed:', e);
+            }
+        };
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'copied-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+    </script>
+</body>
+</html>
