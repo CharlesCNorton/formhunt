@@ -91,12 +91,27 @@ def index():
 @app.route('/api/wolfram-metadata', methods=['POST'])
 def wolfram_metadata():
     """Query Wolfram for geographic metadata."""
-    data = request.json
-    lat = data.get('lat', 0)
-    lon = data.get('lon', 0)
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
 
-    metadata = query_wolfram_metadata(lat, lon)
-    return jsonify(metadata)
+        lat = data.get('lat')
+        lon = data.get('lon')
+
+        if lat is None or lon is None:
+            return jsonify({"error": "Missing lat/lon"}), 400
+
+        # Validate coordinate ranges
+        if not (-90 <= lat <= 90) or not (-180 <= lon <= 180):
+            return jsonify({"error": "Invalid coordinates"}), 400
+
+        metadata = query_wolfram_metadata(float(lat), float(lon))
+        return jsonify(metadata)
+
+    except Exception as e:
+        print(f"API error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
 
 
 @app.route('/api/wolfram-status')

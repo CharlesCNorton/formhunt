@@ -165,8 +165,29 @@
         }
 
         .wolfram-loading {
-            color: #666;
+            color: #888;
             font-style: italic;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #333;
+            border-top-color: #7eb8da;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .wolfram-error {
+            color: #cc6666;
+            font-size: 0.85em;
         }
 
         .layer-toggles {
@@ -503,17 +524,28 @@
             const lat = (currentSelection.north + currentSelection.south) / 2;
             const lon = (currentSelection.east + currentSelection.west) / 2;
 
-            // OSM reverse geocode
+            // OSM reverse geocode with timeout
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+
                 const response = await fetch(
                     `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,
-                    { headers: { 'User-Agent': 'FormHunt/1.0' } }
+                    {
+                        headers: { 'User-Agent': 'FormHunt/1.0' },
+                        signal: controller.signal
+                    }
                 );
-                const data = await response.json();
-                const parts = (data.display_name || '').split(', ').slice(0, 3);
-                document.getElementById('place-name').value = parts.join(', ');
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const parts = (data.display_name || '').split(', ').slice(0, 3);
+                    document.getElementById('place-name').value = parts.join(', ');
+                }
             } catch (e) {
-                console.log('Geocoding failed');
+                console.log('Geocoding failed:', e.message);
+                // Silent fail - place name field stays empty
             }
 
             // Wolfram metadata (async, fail-silent)
@@ -525,31 +557,46 @@
             const dataDiv = document.getElementById('wolfram-data');
 
             section.style.display = 'block';
-            dataDiv.innerHTML = '<span class="wolfram-loading">Querying Wolfram...</span>';
+            dataDiv.innerHTML = '<span class="wolfram-loading"><span class="spinner"></span>Querying Wolfram...</span>';
+
+            // Create abort controller for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
 
             try {
                 const response = await fetch('/api/wolfram-metadata', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat, lon })
+                    body: JSON.stringify({ lat, lon }),
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
 
                 const data = await response.json();
 
-                if (Object.keys(data).length === 0) {
-                    section.style.display = 'none';
+                if (!data || Object.keys(data).length === 0) {
+                    dataDiv.innerHTML = '<span class="wolfram-error">No data available for this location</span>';
                     return;
                 }
-
-                let html = '';
 
                 // Store data globally for filtering
                 window.wolframData = data;
                 renderWolframData();
 
             } catch (e) {
-                console.log('Wolfram query failed:', e);
-                section.style.display = 'none';
+                clearTimeout(timeoutId);
+                console.error('Wolfram query failed:', e);
+
+                if (e.name === 'AbortError') {
+                    dataDiv.innerHTML = '<span class="wolfram-error">Query timed out - try a different location</span>';
+                } else {
+                    dataDiv.innerHTML = '<span class="wolfram-error">Failed to load metadata</span>';
+                }
             }
         }
 
