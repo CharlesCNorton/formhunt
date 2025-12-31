@@ -45,6 +45,11 @@ ExportString[<|
   "islands" -> safeNames[safeQuery["Island", 4]],
   "mountains" -> safeNames[safeQuery["Mountain", 3]],
   "forests" -> safeNames[safeQuery["Forest", 3]],
+  "parks" -> safeNames[safeQuery["Park", 4]],
+  "beaches" -> safeNames[safeQuery["Beach", 3]],
+  "caves" -> safeNames[safeQuery["Cave", 3]],
+  "glaciers" -> safeNames[safeQuery["Glacier", 3]],
+  "volcanoes" -> safeNames[safeQuery["Volcano", 3]],
   "historicalSites" -> safeNames[safeQuery["HistoricalSite", 6]],
   "museums" -> safeNames[safeQuery["Museum", 4]],
   "universities" -> safeNames[safeQuery["University", 3]],
@@ -56,7 +61,8 @@ ExportString[<|
   "tunnels" -> safeNames[safeQuery["Tunnel", 3]],
   "airports" -> safeNames[safeQuery["Airport", 3]],
   "waterfalls" -> safeNames[safeQuery["Waterfall", 3]],
-  "buildings" -> safeNames[safeQuery["Building", 4]]
+  "buildings" -> safeNames[safeQuery["Building", 4]],
+  "cemeteries" -> safeNames[safeQuery["Cemetery", 3]]
 |>, "JSON"]
 '''
 

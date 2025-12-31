@@ -227,10 +227,50 @@
 
         /* Selection cursor when in select mode */
         .select-cursor { cursor: crosshair !important; }
+
+        /* Zoom controls */
+        #zoom-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        #zoom-controls button {
+            width: 36px;
+            height: 36px;
+            font-size: 1.4em;
+            font-weight: bold;
+            background: rgba(30, 30, 50, 0.9);
+            border: 1px solid #444;
+            color: #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #zoom-controls button:hover {
+            background: rgba(50, 50, 80, 0.95);
+            border-color: #666;
+        }
+
+        #zoom-controls button:active {
+            background: rgba(70, 100, 140, 0.95);
+        }
     </style>
 </head>
 <body>
     <div id="cesiumContainer"></div>
+
+    <div id="zoom-controls">
+        <button id="zoom-in">+</button>
+        <button id="zoom-out">−</button>
+    </div>
 
     <div id="sidebar">
         <h1>FormHunt</h1>
@@ -259,9 +299,8 @@
             <div class="layer-toggles">
                 <button class="layer-btn active" data-layer="political">Political</button>
                 <button class="layer-btn active" data-layer="natural">Natural</button>
-                <button class="layer-btn" data-layer="historical">Historical</button>
+                <button class="layer-btn" data-layer="cultural">Cultural</button>
                 <button class="layer-btn" data-layer="infrastructure">Infrastructure</button>
-                <button class="layer-btn" data-layer="institutional">Institutional</button>
             </div>
             <div id="wolfram-data" class="wolfram-data"></div>
         </div>
@@ -291,21 +330,31 @@
             imageryProvider: false  // Start with no imagery
         });
 
-        // Add OpenStreetMap tiles (reliable, no API key)
+        // Add dark map tiles (CartoDB Dark Matter - no API key needed)
         try {
-            const osmProvider = new Cesium.OpenStreetMapImageryProvider({
-                url: 'https://tile.openstreetmap.org/'
+            const darkProvider = new Cesium.UrlTemplateImageryProvider({
+                url: 'https://cartodb-basemaps-a.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png',
+                credit: 'CartoDB'
             });
-            viewer.imageryLayers.addImageryProvider(osmProvider);
-            console.log('OSM imagery loaded');
+            viewer.imageryLayers.addImageryProvider(darkProvider);
+            console.log('Dark map imagery loaded');
         } catch (e) {
             console.error('Failed to load imagery:', e);
         }
 
-        // Globe settings
+        // Globe settings - dark theme
         viewer.scene.globe.enableLighting = false;
         viewer.scene.skyAtmosphere.show = true;
         viewer.scene.globe.showGroundAtmosphere = true;
+        viewer.scene.backgroundColor = Cesium.Color.BLACK;
+        viewer.scene.globe.baseColor = Cesium.Color.BLACK;
+
+        // Ensure zoom controls work
+        viewer.scene.screenSpaceCameraController.enableZoom = true;
+        viewer.scene.screenSpaceCameraController.zoomEventTypes = [
+            Cesium.CameraEventType.WHEEL,
+            Cesium.CameraEventType.PINCH
+        ];
 
         // State
         let selectMode = false;
@@ -390,9 +439,9 @@
             selectionEntity = viewer.entities.add({
                 rectangle: {
                     coordinates: Cesium.Rectangle.fromDegrees(west, south, east, north),
-                    material: Cesium.Color.CORNFLOWERBLUE.withAlpha(0.3),
+                    material: Cesium.Color.CYAN.withAlpha(0.25),
                     outline: true,
-                    outlineColor: Cesium.Color.WHITE,
+                    outlineColor: Cesium.Color.CYAN,
                     outlineWidth: 2
                 }
             });
@@ -504,7 +553,7 @@
             }
         }
 
-        // Layer definitions
+        // Layer definitions - consolidated into 4 categories
         const layers = {
             political: {
                 divisions: 'Divisions',
@@ -514,25 +563,29 @@
                 lakes: 'Lakes',
                 islands: 'Islands',
                 mountains: 'Mountains',
+                volcanoes: 'Volcanoes',
+                glaciers: 'Glaciers',
                 forests: 'Forests',
+                parks: 'Parks',
+                beaches: 'Beaches',
+                caves: 'Caves',
                 waterfalls: 'Waterfalls'
             },
-            historical: {
+            cultural: {
                 historicalSites: 'Historical Sites',
                 museums: 'Museums',
-                shipwrecks: 'Shipwrecks'
+                universities: 'Universities',
+                shipwrecks: 'Shipwrecks',
+                cemeteries: 'Cemeteries',
+                buildings: 'Buildings'
             },
             infrastructure: {
                 bridges: 'Bridges',
                 dams: 'Dams',
                 tunnels: 'Tunnels',
+                mines: 'Mines',
                 airports: 'Airports',
-                mines: 'Mines'
-            },
-            institutional: {
-                universities: 'Universities',
-                militaryBases: 'Military Bases',
-                buildings: 'Buildings'
+                militaryBases: 'Military Bases'
             }
         };
 
@@ -575,6 +628,25 @@
                 renderWolframData();
             });
         });
+
+        // Zoom controls - smooth zoom
+        function smoothZoom(factor) {
+            const camera = viewer.camera;
+            const currentHeight = camera.positionCartographic.height;
+            const targetHeight = currentHeight * factor;
+
+            viewer.camera.flyTo({
+                destination: Cesium.Cartesian3.fromRadians(
+                    camera.positionCartographic.longitude,
+                    camera.positionCartographic.latitude,
+                    Math.max(1000, Math.min(targetHeight, 50000000))
+                ),
+                duration: 0.3
+            });
+        }
+
+        document.getElementById('zoom-in').onclick = () => smoothZoom(0.5);
+        document.getElementById('zoom-out').onclick = () => smoothZoom(2.0);
 
         // Copy coordinates
         document.getElementById('btn-copy').onclick = async function() {
